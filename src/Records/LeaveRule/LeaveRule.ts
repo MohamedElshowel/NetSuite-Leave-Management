@@ -14,10 +14,21 @@ import {BaseModel, ColumnType} from '../../Core/Model/BaseModel';
 export enum LeaveRuleField {
     SUBSIDIARY = 'subsidiary',
     YEAR = 'year',
+    // For Vacation Requests
     DEDUCT_CAUSUAL_FROM_ANNUAL = 'casual_as_annual',
     APPLY_WEEKEND = 'weekend_apply',
     WEEKEND_DAYS = 'weekend_days',
     PERMISSION_HOURS ='permission_hours',
+    // For Employees' Balances
+    CASUAL = '',
+    SICK = '',
+    ANNUAL_NORMAL = '',
+    ANNUAL_ELDERLY = '',
+    ANNUAL_EXPERIENCED = '',
+    EXP_BASED_ON_HIREDATE = '',
+    ANNUAL_TRASFER = '',
+    ELDERLY_AGE = '',
+    PROBATION_PERIOD = '',
 }
 
 
