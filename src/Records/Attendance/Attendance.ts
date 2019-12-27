@@ -10,47 +10,34 @@
 
 import { BaseModel, ColumnType } from '../../Core/Model/BaseModel';
 
-
-export enum PermissionField {
-    EMPLOYEE = 'emp',
-    SUBSIDIARY = 'subsidiary',
-    YEAR = 'year',
-
-    DATE = 'date',
-    FROM = 'from',
-    TO = 'to',
-    PERIOD = 'period',
-    REMAINING_PERIOD = 'left_period',
-    STATUS = 'status',
+interface AttendanceInterface {
 }
 
-export class Permission extends BaseModel {
+export enum AttendanceField {
+    EMPLOYEE = 'emp',
+    DATE = 'date',
+    CHECK_IN = 'check_in',
+    CHECK_OUT = 'check_out',
+    WORK_HOURS = 'work_hours',
+    MACHINE_ID = 'machine_id',
+    NOTES = 'notes'
+}
 
-    recordType: string = 'customrecord_edc_permissions';
+export class Attendance extends BaseModel implements AttendanceInterface {
 
-    columnPrefix: string = 'custrecord_edc_permission_';
+    recordType: string = 'customrecord_edc_attendance';
+    columnPrefix: string = 'custrecord_attendance_';
 
     // Mapping
     typeMap: object = {
-        'emp' : ColumnType.LIST,
-        'subsidiary': ColumnType.LIST,
-        'year': ColumnType.STRING,
-        'from': ColumnType.NUMBER,
-        'to': ColumnType.NUMBER,
-        'period': ColumnType.STRING,
-        'left_period': ColumnType.STRING,
-        'status': ColumnType.LIST,
+        'emp': ColumnType.LIST,
+        'date': ColumnType.DATE,
+        'check_in': ColumnType.NUMBER,
+        'check_out': ColumnType.NUMBER,
+        'work_hours': ColumnType.STRING,
+        'machine_id': ColumnType.NUMBER,
+        'notes': ColumnType.STRING,
     }
 
     columns = Object.keys(this.typeMap);
-
-    relations = {
-        
-        leaveRule: (subsidiary: number, year = new Date().getFullYear()) => {
-            return new Permission()
-                .where(PermissionField.SUBSIDIARY, '==', subsidiary)
-                .where(PermissionField.YEAR, '==', year);
-        },
-    }
-
 }
