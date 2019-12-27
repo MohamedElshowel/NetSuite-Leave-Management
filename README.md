@@ -2,7 +2,7 @@
 Leave Management Module customized for NetSuite System
 
 **Technologies:**
-- [Oracle NetSuite](www.netsuite.com/portal/home.shtml)
+- [Oracle NetSuite](https://www.netsuite.com/portal/home.shtml)
 - [SuiteScript 2.0](https://docs.oracle.com/cloud/latest/netsuitecs_gs/NSAPI/NSAPI.pdf)
 - [TypeScript](https://www.typescriptlang.org/docs/home.html)
 - [Jest](https://github.com/facebook/jest)
@@ -12,6 +12,15 @@ Leave Management Module customized for NetSuite System
 - [AMD](https://github.com/amdjs/amdjs-api/blob/master/AMD.md)
 
 ## Getting Started
+
+**Install Dependencies**
+```
+npm install
+```
+_OR_
+```
+npm i
+```
 
 **Transpile Project**
 ```
