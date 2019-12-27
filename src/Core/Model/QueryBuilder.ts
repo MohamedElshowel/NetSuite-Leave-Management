@@ -3,6 +3,14 @@ import {QueryResults} from "./QueryResults";
 import * as search from "N/search";
 import * as record from "N/record";
 
+/**
+ * - `STRING` :  Email Address, Free-Form Text, Long Text, Password, Percent, Phone Number, Rich Text, Text Area.
+ * - `BOOLEAN`:  Check Box.
+ * - `NUMBER` :  Currency, Decimal Number, Time of Day.
+ * - `DATE`   :  Date.
+ * - `LIST`   :  List/Record, Document, Image.
+ * - `MULTI`  :  Multi Select.
+ */
 export enum ColumnType { STRING = 'string', BOOLEAN = 'boolean', NUMBER = 'number', DATE = 'date', LIST = 'list', MULTI = 'multi' }
 
 interface QueryBuilderInterface {

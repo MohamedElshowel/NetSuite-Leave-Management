@@ -21,7 +21,7 @@ export namespace UI {
             title: title,
             message: message,
             type: type
-        }).show({duration: duration});
+        }).show({ duration: duration });
     }
 }
 
@@ -42,7 +42,9 @@ export namespace Model {
             'seconds': number / 1000,
             'minutes': number / (1000 * 60),
             'hours': number / (1000 * 60 * 60),
-            'days': number / (1000 * 60 * 60 * 24)
+            'days': number / (1000 * 60 * 60 * 24),
+            'months': number / (1000 * 60 * 60 * 24 * 30.4375),
+            'years': number / (1000 * 60 * 60 * 24 * 365.25)
         }
     }
 
@@ -108,5 +110,69 @@ export namespace Model {
         }
 
         return periodStr;
+    }
+
+    /**
+     * @function millisecondsToHHMMSS converts milliseconds to the "HH:MM:SS" format as a string
+     * @param milliseconds MilliSeconds to be converts
+     * @param getSeconds   Boolean to check if the result should be HH:MM:SS or HH:MM:00 (ignoring seconds)
+     * @returns string formated with "HH:MM:SS"
+     */
+    export function millisecondsToHHMMSS(milliseconds: number, ignoreSeconds: boolean = false): string {
+        // Convert to seconds:
+        let seconds = milliseconds / 1000;
+        // Extract hours:
+        let hours = Math.floor(seconds / 3600); // 3,600 seconds in 1 hour
+        seconds = seconds % 3600;               // seconds remaining after extracting hours
+        // Extract minutes:
+        let minutes = Math.floor(seconds / 60); // 60 seconds in 1 minute
+        // Keep only seconds not extracted to minutes:
+        seconds = seconds % 60;
+
+        let hrs = ("0" + hours).slice(-2);
+        let mins = ("0" + minutes).slice(-2);
+        let sec = (!ignoreSeconds) ? ("0" + seconds).slice(-2) : "00";
+
+        return hrs + ':' + mins + ':' + sec;
+    }
+
+
+    /**
+     * @param hhmmss string format represents time (HH:MM:SS)
+     */
+    export function hhmmssToMilliseconds(hhmmss: string) {
+        let hours = Number(hhmmss.split(':')[0]);
+        let minutes = Number(hhmmss.split(':')[1]);
+        let seconds = Number(hhmmss.split(':')[2]);
+
+        return (hours * 1000 * 60 * 60) + (minutes * 1000 * 60) + (seconds * 1000);
+    }
+
+    export function getTimeFromDateTime(dateTime) {
+        let time = dateTime.toString().split(' ');
+        return (time[1]) + ((time[2]) ? ' ' + time[2] : '')    // Check for 12HR/24HR system
+    }
+
+
+    /**
+     * @param existDate - Day as it exists in NetSuite or any thing else
+     * @param sep - Separator between Date - ex: 25`-`Jan`-`2011 or 25`/`01`/`2011
+     */
+    export function dateConverter(existDate: string, sep: string = '-'): Date {
+        // Getting Day and Time Separately
+        var prevDate = existDate.split(' ')[0];
+        var time = existDate.slice(prevDate.length + 1, existDate.length).split(':');
+        var hour = Number((time[1].split(' ')[1]) ? ((time[1].split(' ')[1].toUpperCase() == 'PM') ? Number(time[0]) + 12 : time[0]) : time[0]);
+        var minute = Number(time[1].split(' ')[0]);
+
+        // Detect date separator whether it is '-' or '/'
+        sep = (prevDate.indexOf('/') !== -1) ? '/' : sep;
+        var day = Number(prevDate.split(sep)[0]);
+        var year = Number((prevDate.split(sep)[2].length < 4) ? '20' + prevDate.split(sep)[2] : prevDate.split(sep)[2]);
+        var monthText = prevDate.split(sep)[1].toLowerCase();
+        var months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+        var month = Number(prevDate.split(sep)[1]) ? (Number(prevDate.split(sep)[1]) - 1) : months.indexOf(monthText);
+        var newDate = new Date(year, month, day, hour, minute);
+        return newDate;
     }
 }
