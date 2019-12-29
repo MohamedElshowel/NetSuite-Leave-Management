@@ -10,12 +10,11 @@ import { EntryPoints } from 'N/types';
 import * as record from 'N/record';
 import * as search from 'N/search';
 import * as file from 'N/file';
-import * as error from 'N/error'
+import * as log from 'N/log';
 import { Model } from '../helpers';
 import { LeaveBalance, LeaveBalanceField } from "../LeaveBalance/LeaveBalance";
 import { Employee, EmployeeField } from '../Employee/Employee';
 import { LeaveRule, LeaveRuleField } from '../LeaveRule/LeaveRule';
-import { QueryResults } from '../Model/QueryResults';
 
 
 export function execute(context: EntryPoints.Scheduled.executeContext) {
@@ -64,9 +63,13 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                     LeaveRuleField.ANNUAL_TRASFER, LeaveRuleField.EXP_BASED_ON_HIREDATE,
                     LeaveRuleField.ELDERLY_AGE, LeaveRuleField.PROBATION_PERIOD]);
 
-                // Push the leave rule result to the array
-                leaveRuleRecords.push(leaveRule);
-                subsidiariesIDs.push(subsidiaryID);
+                if (leaveRule) {
+                    // Push the leave rule result to the array
+                    leaveRuleRecords.push(leaveRule);
+                    subsidiariesIDs.push(subsidiaryID);
+                } else {
+                    log.error('No Leave Rule to Update Leave Balance', `No leave rule found for Subsidiary #${subsidiaryID} in ${new Date().getFullYear()}`);
+                }
             } else {
                 leaveRule = leaveRuleRecords[subsidiariesIDs.indexOf(subsidiaryID)];
             }
@@ -84,15 +87,16 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
             const casualBalance = leaveRule.getField(LeaveRuleField.CASUAL).value;
             const sickBalance = leaveRule.getField(LeaveRuleField.SICK).value;
             const probationPeriod = leaveRule.getField(LeaveRuleField.PROBATION_PERIOD).value;
-            const elderlyAge = leaveRule.getField(LeaveRuleField.CASUAL).value;
-            const isExpBasedOnHireDate = leaveRule.getField(LeaveRuleField.ELDERLY_AGE).value;
+            const elderlyAge = leaveRule.getField(LeaveRuleField.ELDERLY_AGE).value;
+            const isExpBasedOnHireDate = leaveRule.getField(LeaveRuleField.EXP_BASED_ON_HIREDATE).value;
             const isTransferredBalance = leaveRule.getField(LeaveRuleField.ANNUAL_TRASFER).value;
 
             if (workingPeriod >= probationPeriod) {
-                if ((isExpBasedOnHireDate && (workingPeriod / 12 >= 10)) || !isExpBasedOnHireDate && empExpYears >= 10)
+                if ((isExpBasedOnHireDate && (workingPeriod / 12 >= 10)) || !isExpBasedOnHireDate && empExpYears >= 10) {
                     annualBalance = Number(leaveRule.getField(LeaveRuleField.ANNUAL_EXPERIENCED).value);
-                else
+                } else {
                     annualBalance = Number(leaveRule.getField(LeaveRuleField.ANNUAL_NORMAL).value);
+                }
             }
 
             // If the employee is elderly override the balance with the elderly balance
@@ -102,7 +106,7 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
 
             // Add the remaining annual balance to the new year's transferred balance
             if (isTransferredBalance) {
-                const prevLeaveBalance: LeaveBalance = new LeaveBalance()
+                const prevLeaveBalance = new LeaveBalance()
                     .where(LeaveBalanceField.EMPLOYEE, '==', employees[i].id)
                     .where(LeaveBalanceField.YEAR, '==', thisYear - 1)
                     .first([LeaveBalanceField.ANNUAL]);
@@ -121,7 +125,7 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
 
             // Initial Data
             leaveBalance.getField(LeaveBalanceField.EMPLOYEE).value = employees[i].id;
-            leaveBalance.getField(LeaveBalanceField.YEAR).value = thisYear;
+            leaveBalance.getField(LeaveBalanceField.YEAR).value = thisYear.toString().split('.')[0];
             leaveBalance.getField(LeaveBalanceField.SUBSIDIARY).value = subsidiaryID;
             leaveBalance.getField(LeaveBalanceField.DEPARTMENT).value = employees[i].getValue(EmployeeField.DEPARTMENT);
             leaveBalance.getField(LeaveBalanceField.SUPERVISOR).value = employees[i].getValue(EmployeeField.SUPERVISOR);
@@ -143,6 +147,5 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                 id: employees[i].id,
             }).setValue(EmployeeField.EXPERIENCE_YEARS, (empExpYears + 1));
         }
-
     }
 }

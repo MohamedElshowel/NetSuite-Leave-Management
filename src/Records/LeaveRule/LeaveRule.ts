@@ -20,15 +20,15 @@ export enum LeaveRuleField {
     WEEKEND_DAYS = 'weekend_days',
     PERMISSION_HOURS ='permission_hours',
     // For Employees' Balances
-    CASUAL = '',
-    SICK = '',
-    ANNUAL_NORMAL = '',
-    ANNUAL_ELDERLY = '',
-    ANNUAL_EXPERIENCED = '',
-    EXP_BASED_ON_HIREDATE = '',
-    ANNUAL_TRASFER = '',
-    ELDERLY_AGE = '',
-    PROBATION_PERIOD = '',
+    CASUAL = 'casual_days',
+    SICK = 'sick_days',
+    ANNUAL_NORMAL = 'regvac_less10y',
+    ANNUAL_ELDERLY = 'elderly_emp_vacs',
+    ANNUAL_EXPERIENCED = 'regvac_more10y',
+    EXP_BASED_ON_HIREDATE = 'exp_hiredate',
+    ANNUAL_TRASFER = 'transfer_days',
+    ELDERLY_AGE = 'elderly_emp_age',
+    PROBATION_PERIOD = 'probation_period',
 }
 
 
@@ -38,11 +38,21 @@ export class LeaveRule extends BaseModel {
 
     typeMap = {
         'subsidiary': ColumnType.LIST,
+        'year': ColumnType.STRING,
         'casual_as_annual': ColumnType.BOOLEAN,
         'weekend_apply': ColumnType.BOOLEAN,
         'weekend_days': ColumnType.MULTI,
-        'year': ColumnType.STRING,
-        // Map/Reduce Script Fields
+        'permission_hours': ColumnType.NUMBER,
+        // Balance Fields
+        'casual_days': ColumnType.NUMBER,
+        'sick_days': ColumnType.NUMBER,
+        'regvac_less10y': ColumnType.NUMBER,
+        'regvac_more10y': ColumnType.NUMBER,
+        'elderly_emp_vacs': ColumnType.NUMBER,
+        'exp_hiredate': ColumnType.BOOLEAN,
+        'transfer_days': ColumnType.BOOLEAN,
+        'elderly_emp_age': ColumnType.NUMBER,
+        'probation_period': ColumnType.NUMBER
     };
 
     columns = Object.keys(this.typeMap);
