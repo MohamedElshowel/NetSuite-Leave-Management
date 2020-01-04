@@ -2,6 +2,7 @@ import { LeaveBalance } from '../LeaveBalance/LeaveBalance';
 import { BaseModel, ColumnType } from '../../Core/Model/BaseModel';
 
 export enum EmployeeField {
+    NAME = 'entityid',
     JOBTITLE = 'title',
     SUBSIDIARY = 'subsidiary',
     SUPERVISOR = 'supervisor',

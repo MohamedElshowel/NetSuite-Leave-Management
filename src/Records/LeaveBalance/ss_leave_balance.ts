@@ -27,7 +27,7 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
         type: search.Type.EMPLOYEE,
         columns: [
             EmployeeField.ISINACTIVE, EmployeeField.SUBSIDIARY, EmployeeField.BIRTHDATE, EmployeeField.HIREDATE, EmployeeField.EXPERIENCE_YEARS,
-            EmployeeField.DEPARTMENT, EmployeeField.SUPERVISOR, EmployeeField.JOBTITLE
+            EmployeeField.DEPARTMENT, EmployeeField.SUPERVISOR, EmployeeField.JOBTITLE, EmployeeField.NAME
         ],
         filters: [
             search.createFilter({
@@ -68,7 +68,11 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                     leaveRuleRecords.push(leaveRule);
                     subsidiariesIDs.push(subsidiaryID);
                 } else {
-                    log.error('No Leave Rule to Update Leave Balance', `No leave rule found for Subsidiary #${subsidiaryID} in ${new Date().getFullYear()}`);
+                    const empName = employees[i].getValue(EmployeeField.NAME);
+                    let thisYear = new Date().getFullYear();
+                    log.audit(`${empName} won't have a leave balance in ${thisYear}!`,
+                        `Can't find a Leave Rule for ${empName}'s Subsidiary (${employees[i].getText(EmployeeField.SUBSIDIARY)}) in ${thisYear}`);
+                    continue;   //Skip this employee
                 }
             } else {
                 leaveRule = leaveRuleRecords[subsidiariesIDs.indexOf(subsidiaryID)];
