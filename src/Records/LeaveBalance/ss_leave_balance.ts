@@ -11,6 +11,7 @@ import * as record from 'N/record';
 import * as search from 'N/search';
 import * as file from 'N/file';
 import * as log from 'N/log';
+import * as runtime from 'N/runtime';
 import { Model } from '../helpers';
 import { LeaveBalance, LeaveBalanceField } from "../LeaveBalance/LeaveBalance";
 import { Employee, EmployeeField } from '../Employee/Employee';
@@ -22,6 +23,9 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
     let subsidiariesIDs = [];
     let leaveRuleRecords = [];
 
+    const today = new Date();
+    const thisYear = today.getFullYear();
+
     // Get all the emoloyees recorded (Max. allowed = 1000 employees)
     const employees = search.create({
         type: search.Type.EMPLOYEE,
@@ -29,16 +33,6 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
             EmployeeField.ISINACTIVE, EmployeeField.SUBSIDIARY, EmployeeField.BIRTHDATE, EmployeeField.HIREDATE, EmployeeField.EXPERIENCE_YEARS,
             EmployeeField.DEPARTMENT, EmployeeField.SUPERVISOR, EmployeeField.JOBTITLE, EmployeeField.NAME
         ],
-        filters: [
-            search.createFilter({
-                name: EmployeeField.HIREDATE,
-                operator: search.Operator.ISNOTEMPTY
-            }),
-            search.createFilter({
-                name: EmployeeField.BIRTHDATE,
-                operator: search.Operator.ISNOTEMPTY
-            })
-        ]
     }).run().getRange({ start: 0, end: 999 });
 
     // const employees = new Employee().find([
@@ -48,7 +42,15 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
 
     for (let i = 0; i < employees.length; i++) {
         const isInactive = employees[i].getValue(EmployeeField.ISINACTIVE);
-        if (!isInactive || isInactive !== 'T') {
+        if (!isInactive) {
+
+            const empName = employees[i].getValue(EmployeeField.NAME);
+            // Skip employees who have not birth date or hire date
+            if (!employees[i].getValue(EmployeeField.BIRTHDATE) || !employees[i].getValue(EmployeeField.HIREDATE)) {
+                log.audit(`${empName} won't have a leave balance in ${thisYear}!`, `${empName} does not have a birthdate or a hiredate`);
+                continue;
+            }
+
             let leaveRule: LeaveRule;
             // Load Subsidiary's leave rule
             const subsidiaryID = employees[i].getValue(EmployeeField.SUBSIDIARY);
@@ -57,7 +59,7 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
             if (subsidiariesIDs.indexOf(subsidiaryID) === -1) {
                 leaveRule = new LeaveRule()
                     .where(LeaveRuleField.SUBSIDIARY, '==', subsidiaryID)
-                    .where(LeaveRuleField.YEAR, '==', new Date().getFullYear())
+                    .where(LeaveRuleField.YEAR, '==', thisYear.toString())
                     .first([LeaveRuleField.CASUAL, LeaveRuleField.SICK, LeaveRuleField.ANNUAL_NORMAL,
                     LeaveRuleField.ANNUAL_ELDERLY, LeaveRuleField.ANNUAL_EXPERIENCED,
                     LeaveRuleField.ANNUAL_TRASFER, LeaveRuleField.EXP_BASED_ON_HIREDATE,
@@ -68,8 +70,6 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                     leaveRuleRecords.push(leaveRule);
                     subsidiariesIDs.push(subsidiaryID);
                 } else {
-                    const empName = employees[i].getValue(EmployeeField.NAME);
-                    let thisYear = new Date().getFullYear();
                     log.audit(`${empName} won't have a leave balance in ${thisYear}!`,
                         `Can't find a Leave Rule for ${empName}'s Subsidiary (${employees[i].getText(EmployeeField.SUBSIDIARY)}) in ${thisYear}`);
                     continue;   //Skip this employee
@@ -78,10 +78,8 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                 leaveRule = leaveRuleRecords[subsidiariesIDs.indexOf(subsidiaryID)];
             }
 
-            const today = new Date();
-            const thisYear = today.getFullYear();
-            const hireDate = new Date(employees[i].getValue(EmployeeField.HIREDATE).toString());
-            const birthdate = new Date(employees[i].getValue(EmployeeField.BIRTHDATE).toString());
+            const hireDate = Model.convertNSDateToJSDate(employees[i].getValue(EmployeeField.HIREDATE).toString());
+            const birthdate = Model.convertNSDateToJSDate(employees[i].getValue(EmployeeField.BIRTHDATE).toString());
             const empExpYears = Number(employees[i].getValue(EmployeeField.EXPERIENCE_YEARS));
             const currentAge = Math.floor(Model.millisecondsToHuman(today.getTime() - birthdate.getTime()).years);
             const workingPeriod = Math.floor(Model.millisecondsToHuman(today.getTime() - hireDate.getTime()).months);
@@ -145,11 +143,15 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
 
             leaveBalance.save();
 
-            // Increment the years of experience by 1:
-            record.load({
-                type: record.Type.EMPLOYEE,
-                id: employees[i].id,
-            }).setValue(EmployeeField.EXPERIENCE_YEARS, (empExpYears + 1));
+            // Increment the years of experience by 1 if it is enabled in script parameters
+            if (runtime.getCurrentScript().getParameter({ name: 'custscript_ss_increment_exp_years' })) {
+                var employeeRecord = record.load({
+                    type: record.Type.EMPLOYEE,
+                    id: employees[i].id,
+                });
+                employeeRecord.setValue(EmployeeField.EXPERIENCE_YEARS, (empExpYears + 1));
+                employeeRecord.save();
+            }
         }
     }
 }
