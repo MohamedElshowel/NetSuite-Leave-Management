@@ -1,5 +1,9 @@
 import {BaseModel, ColumnType} from '../../Core/Model/BaseModel';
 
+export enum HolidayFields {
+    DATE = 'date',
+}
+
 export class Holiday extends BaseModel {
 
     recordType = 'customrecord_edc_holiday';

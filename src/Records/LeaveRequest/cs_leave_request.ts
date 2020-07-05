@@ -12,14 +12,14 @@ todo get & set configuration From Vacation Rule
 
 
 // import runtime from "N/runtime";
-import {EntryPoints} from 'N/types';
+import { EntryPoints } from 'N/types';
 import * as UIMessage from "N/ui/message";
 
-import {BalanceField, EmployeeField, LeaveRequest, RequestField} from "./LeaveRequest";
-import {ApprovalStatus, Model, PeriodFrequentType, UI} from "../helpers";
-import {LeaveRuleField} from '../LeaveRule/LeaveRule';
-import {LeaveType, LeaveTypeFields} from '../LeaveType/LeaveType';
-import {Holiday} from "../Holiday/Holiday";
+import { BalanceField, EmployeeField, LeaveRequest, RequestField, StandardLeaveType } from "./LeaveRequest";
+import { ApprovalStatus, Model, PeriodFrequentType, UI } from "../helpers";
+import { LeaveRuleField } from '../LeaveRule/LeaveRule';
+import { LeaveType, LeaveTypeFields } from '../LeaveType/LeaveType';
+import { Holiday } from "../Holiday/Holiday";
 
 // Global Variables
 let employee;
@@ -33,16 +33,6 @@ let holidays;
 
 // Filling the Balance Columns
 Object.keys(BalanceField).forEach(key => leaveRequest.balanceColumns.push(BalanceField[key]));
-
-enum StandardLeaveType {
-    ANNUAL = 'annual',
-    CASUAL = 'casual',
-    SICK = 'sick',
-    UNPAID = 'unpaid',
-    REPLACEMENT = 'replacement',
-    TRANSFERRED = 'transferred',
-    CUSTOM = 'custom',
-}
 
 // Pushing Custom Validations to record fields
 leaveRequest.validation['start'].push(
@@ -94,14 +84,14 @@ function pageInit(context: EntryPoints.Client.pageInitContext) {
         'total_regular'
     ]);
 
-    debugger;
-
     if (balances)
         initCounters(leaveRequest, balances);
     else {
         leaveRequest.getFields([RequestField.TYPE, RequestField.START, RequestField.END]).disable();
         UI.showMessage('Warning', 'No vacation balance for this employee', 0, UIMessage.Type.INFORMATION);
     }
+
+    createBalanceObject(leaveRequest);
 }
 
 
@@ -127,7 +117,7 @@ function validateField(context: EntryPoints.Client.validateFieldContext) {
             .leaveType(leaveRequest)
             .setRecord(field.value);
 
-        partDayLeave(leaveType, leaveRequest.getField(RequestField.START).value, leaveRequest.getField(RequestField.END).value);
+        calculatePartDayLeave(leaveType, leaveRequest.getField(RequestField.START).value, leaveRequest.getField(RequestField.END).value);
 
         if (!leaveType) {
             UI.showMessage(
@@ -185,7 +175,19 @@ function fieldChanged(context: EntryPoints.Client.fieldChangedContext) {
 
 
 function saveRecord(context: EntryPoints.Client.saveRecordContext) {
+    leaveRequest.createFromRecord(context.currentRecord);
+    leaveRequest.getField(RequestField.YEAR).value = new Date(leaveRequest.getField(RequestField.START).value.toString()).getFullYear();
     return true;
+}
+
+
+function createBalanceObject(leaveRequest: LeaveRequest) {
+    let balanceObj = {
+        'annual': leaveRequest.getField(BalanceField.ANNUAL).value,
+        'transferred': leaveRequest.getField(BalanceField.TRANSFERRED).value,
+        'replacement': leaveRequest.getField(BalanceField.REPLACEMENT).value,
+    }
+    leaveRequest.getField(BalanceField.INITIAL_BALANCE_OBJ).value = JSON.stringify(balanceObj);
 }
 
 function calculateVacation(vacationType, start, end) {
@@ -195,7 +197,7 @@ function calculateVacation(vacationType, start, end) {
     if (!startDate || !endDate)
         return 0;
 
-    partDayLeave(vacationType, start, end);
+    calculatePartDayLeave(vacationType, start, end);
 
     // Get Vacation Rule to extract the weekend days from it.
     let applyWeekend = leaveRule.getField(LeaveRuleField.APPLY_WEEKEND).value;
@@ -286,26 +288,21 @@ export = {
 function deductRegularVacation() {
     let annualField = leaveRequest.getField(BalanceField.ANNUAL);
     let transferredField = leaveRequest.getField(BalanceField.TRANSFERRED);
-    let replacementField = leaveRequest.getField(BalanceField.REPLACEMENT);
 
     transferredField.value = balances.transferred.value - leavePeriod;
+
     if (transferredField.value < 0) {
-        replacementField.value = balances.replacement.value - Math.abs(transferredField.value);
+        annualField.value = balances.annual.value - Math.abs(transferredField.value);
         transferredField.value = 0;
 
-        if (replacementField.value < 0) {
-            annualField.value = balances.annual.value - Math.abs(replacementField.value);
-            replacementField.value = 0;
-
-            if (annualField.value < 0) {
-                UI.showMessage('Warning', 'No vacation balance!');
-            }
+        if (annualField.value < 0) {
+            UI.showMessage('Warning', 'No vacation balance!');
         }
     }
 }
 
 
-function partDayLeave(leaveType, start, end) {
+function calculatePartDayLeave(leaveType, start, end) {
     let startDate = new Date(start);
     let endDate = new Date(end);
 

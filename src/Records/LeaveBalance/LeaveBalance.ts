@@ -20,6 +20,7 @@ export enum LeaveBalanceField {
     SUPERVISOR = 'supervisor',
     DEPARTMENT = 'department',
     
+    STANDARD_ANNUAL = 'std_annual',
     ANNUAL = 'annual',
     TRANSFERRED = 'transferred',
     REPLACEMENT = 'replacement',
@@ -44,6 +45,7 @@ export class LeaveBalance extends BaseModel {
         "department": ColumnType.LIST,
         "supervisor": ColumnType.LIST,
 
+        "std_annual": ColumnType.NUMBER,
         "transferred": ColumnType.NUMBER,
         "annual": ColumnType.NUMBER,
         "replacement": ColumnType.NUMBER,

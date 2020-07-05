@@ -16,6 +16,17 @@ import { LeaveRule, LeaveRuleField } from "../LeaveRule/LeaveRule";
 import { Employee } from "../Employee/Employee";
 // import { FieldGroup } from '../../Core/Model/FieldGroup';
 
+
+export enum StandardLeaveType {
+    ANNUAL = 'annual',
+    CASUAL = 'casual',
+    SICK = 'sick',
+    UNPAID = 'unpaid',
+    REPLACEMENT = 'replacement',
+    TRANSFERRED = 'transferred',
+    CUSTOM = 'custom',
+}
+
 /** Defining the Fields in Vacation Request Record */
 export enum EmployeeField {
     EMPLOYEE = 'emp_name',
@@ -33,9 +44,11 @@ export enum BalanceField {
     SICK = 'blc_sick',
     TOTAL_REGULAR = 'blc_total_regular',
     UNPAID = 'blc_unpaid',
+    INITIAL_BALANCE_OBJ = 'blc_init_obj',
 }
 
 export enum RequestField {
+    YEAR = 'year',
     TYPE = 'type',
     START = 'start',
     END = 'end',
@@ -51,6 +64,7 @@ export enum RelationField {
     RULE_CASUAL_FROM_ANNUAL = 'rule_cas_as_ann',
     RULE_APPLY_WEEKEND = 'rule_weekend_app',
     RULE_WEEKENDS = 'rule_weekend_days',
+    RULE_TRANSFER_UNUSED_BALANCE = 'rule_transfer_blc',
 
     TYPE_MAPPING = 'type_mapping',
     TYPE_LIMIT_DAYS = 'type_dayslimit',
@@ -82,6 +96,8 @@ export class LeaveRequest extends BaseModel {
         'blc_sick': ColumnType.NUMBER,
         'blc_total_regular': ColumnType.NUMBER,
         'blc_unpaid': ColumnType.NUMBER,
+        // Stringified JSON Object of the initial balance before the request
+        'blc_init_obj': ColumnType.STRING,
         // Request Field
         'type': ColumnType.LIST,
         'start': ColumnType.DATE,

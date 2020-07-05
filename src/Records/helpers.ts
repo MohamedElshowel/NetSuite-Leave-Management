@@ -52,6 +52,24 @@ export namespace Model {
         return (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
     }
 
+    /**
+    * @function convert-NetSuite-Date-to-JavaScript-Date - convert from (DD/MM/YYYY) format at NetSuite to normal date object in JS.
+    * @param {string} date - date string or date/time from NetSuite fields
+    */
+    export function convertNSDateToJSDate(date: string | Date): Date {
+        let dateArr = date.toString().split('/');
+        return new Date(`${dateArr[1]}/${dateArr[0]}/${dateArr[2]}`);
+    }
+
+    /**
+     * @param {Date} date - JavaScript Date Object
+     * @param {string} timeZone - the time zone that the date will be converted to. i.e, `"Africa/Cairo"` and `"Europe/Zurich"`
+     */
+    export function convertDateToAnotherTimeZone(date: Date, timeZone: string = 'Africa/Cairo'): Date {
+        let dateString = date.toLocaleString('en-US', { timeZone: timeZone }).split(',')[0].split('/');
+        return new Date(`${dateString[0]}/${dateString[1]}/${dateString[2]}`);
+    }
+
     export function getWorkingDays(startDate, endDate, weekEnds: any = [5, 6], holidays = []) {
         let result = 0;
 

@@ -51,6 +51,16 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                 continue;
             }
 
+            // Check if the employee has already vacation balance for this year, ignore them.
+            const hasThisYearBalance = new LeaveBalance()
+                .where(LeaveBalanceField.EMPLOYEE, '==', employees[i].id)
+                .where(LeaveBalanceField.YEAR, '==', thisYear)
+                .first(['internalid']);
+
+            if (hasThisYearBalance) {
+                continue;
+            }
+
             let leaveRule: LeaveRule;
             // Load Subsidiary's leave rule
             const subsidiaryID = employees[i].getValue(EmployeeField.SUBSIDIARY);
@@ -106,16 +116,26 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
                 annualBalance = Number(leaveRule.getField(LeaveRuleField.ANNUAL_ELDERLY).value);
             }
 
+            const prevLeaveBalance = new LeaveBalance()
+                .where(LeaveBalanceField.EMPLOYEE, '==', employees[i].id)
+                .where(LeaveBalanceField.YEAR, '==', thisYear - 1)
+                .first(['internalid', LeaveBalanceField.ANNUAL]);
+
             // Add the remaining annual balance to the new year's transferred balance
             if (isTransferredBalance) {
-                const prevLeaveBalance = new LeaveBalance()
-                    .where(LeaveBalanceField.EMPLOYEE, '==', employees[i].id)
-                    .where(LeaveBalanceField.YEAR, '==', thisYear - 1)
-                    .first([LeaveBalanceField.ANNUAL]);
-
                 if (prevLeaveBalance) {
                     transferredBalance = Number(prevLeaveBalance.getField(LeaveBalanceField.ANNUAL).value);
                 }
+            }
+
+            // Deactivate the balance of the last year.
+            if (prevLeaveBalance) {
+                const prevBalanceRecord = record.load({
+                    type: new LeaveBalance().recordType,
+                    id: Number(prevLeaveBalance.getField("internalid").value)
+                });
+                prevBalanceRecord.setValue("isinactive", true);
+                prevBalanceRecord.save();
             }
 
             // Saving the new balance to a new LeaveBalance record
@@ -134,6 +154,7 @@ export function execute(context: EntryPoints.Scheduled.executeContext) {
             leaveBalance.getField(LeaveBalanceField.JOBTITLE).value = employees[i].getValue(EmployeeField.JOBTITLE);
 
             // Balances
+            leaveBalance.getField(LeaveBalanceField.STANDARD_ANNUAL).value = annualBalance;
             leaveBalance.getField(LeaveBalanceField.ANNUAL).value = annualBalance;
             leaveBalance.getField(LeaveBalanceField.CASUAL).value = casualBalance;
             leaveBalance.getField(LeaveBalanceField.SICK).value = sickBalance;
