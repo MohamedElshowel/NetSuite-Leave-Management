@@ -92,7 +92,7 @@ export function beforeSubmit(context: EntryPoints.UserEvent.beforeSubmitContext)
                 break;
         }
         leaveBalance.save();
-    } else if (requestStatus == ApprovalStatus.PENDING_DEDUCT_BALANCE) {
+    } else {
         log.debug("Details", "Will deduct the balance");
         // Save the current balances without approving.
         leaveBalance.getField(LeaveBalanceField.ANNUAL).value = Number(leaveRequest.getField(BalanceField.ANNUAL).value);
