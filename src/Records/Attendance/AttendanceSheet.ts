@@ -16,6 +16,10 @@ interface AttendanceSheetInterface {
 export enum AttendanceSheetField {
     DATE = 'date',
     FILE = 'file',
+    // Monthly AttendanceSheet fields
+    MONTH = 'month',
+    YEAR = 'year',
+    NOTES = 'notes',
 }
 
 export class AttendanceSheet extends BaseModel implements AttendanceSheetInterface {
@@ -36,6 +40,10 @@ export class AttendanceSheet extends BaseModel implements AttendanceSheetInterfa
     typeMap: object = {
         'date': ColumnType.DATE,
         'file': ColumnType.LIST,
+        // Monthly AttendanceSheet fields
+        'month': ColumnType.LIST,
+        'year': ColumnType.STRING,
+        'notes': ColumnType.STRING,
     }
 
     columns = Object.keys(this.typeMap);
