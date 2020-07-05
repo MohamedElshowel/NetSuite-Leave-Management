@@ -10,7 +10,8 @@ export enum EmployeeField {
     HIREDATE = 'hiredate',
     BIRTHDATE = 'birthdate',
     ISINACTIVE = 'isinactive',
-    EXPERIENCE_YEARS = 'custentity_edc_emp_exp_years'
+    EXPERIENCE_YEARS = 'custentity_edc_emp_exp_years',
+    MACHINE_ID = 'custentity_emp_attendance_machine_id'
 }
 
 export class Employee extends BaseModel {
@@ -25,7 +26,8 @@ export class Employee extends BaseModel {
         'hiredate': ColumnType.DATE,
         'birthdate': ColumnType.DATE,
         'isinactive': ColumnType.BOOLEAN,
-        'custentity_edc_emp_exp_years': ColumnType.NUMBER
+        'custentity_edc_emp_exp_years': ColumnType.NUMBER,
+        'custentity_emp_attendance_machine_id': ColumnType.NUMBER,
     };
 
     relations = {
