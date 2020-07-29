@@ -13,6 +13,7 @@ todo get & set configuration From Vacation Rule
 
 // import runtime from "N/runtime";
 import { EntryPoints } from 'N/types';
+import * as runtime from 'N/runtime';
 import * as UIMessage from "N/ui/message";
 
 import { BalanceField, EmployeeField, LeaveRequest, RequestField, StandardLeaveType } from "./LeaveRequest";
@@ -20,6 +21,7 @@ import { ApprovalStatus, Model, PeriodFrequentType, UI } from "../helpers";
 import { LeaveRuleField } from '../LeaveRule/LeaveRule';
 import { LeaveType, LeaveTypeFields } from '../LeaveType/LeaveType';
 import { Holiday } from "../Holiday/Holiday";
+import { Employee } from "../Employee/Employee";
 
 // Global Variables
 let employee;
@@ -57,11 +59,11 @@ function pageInit(context: EntryPoints.Client.pageInitContext) {
         .setRecord(typeField.value);
 
     // get employee balance
-    // Inject relationship dependency by hand now till we find a better way
-    employee = leaveRequest.relations
-        .getEmployee(leaveRequest);
-    // OR:
-    // employee = runtime.getCurrentUser().id;
+    if (runtime.getCurrentUser().roleCenter === "EMPLOYEE") {
+        employee = new Employee().setRecord(runtime.getCurrentUser().id);
+    } else {
+        employee = leaveRequest.relations.getEmployee(leaveRequest);
+    }
 
     leaveBalance = employee.relations
         .vacationBalance(employee, new Date().getFullYear());
