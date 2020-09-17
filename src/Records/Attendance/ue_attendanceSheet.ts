@@ -23,8 +23,8 @@ export function beforeSubmit(context: EntryPoints.UserEvent.beforeSubmitContext)
     let fileID = Number(attendance.getField(AttendanceSheetField.FILE).value);
     let attendanceFile = file.load({ id: fileID });
     let fileContent = attendanceFile.getContents();    // Getting the inside data
-    let employeesAttendance = getAttendancePeriod(fileContent, attendance);
-    saveEmpAttendance(employeesAttendance, attendance);
+    let attendanceData = getAttendancePeriod(fileContent, attendance);
+    saveEmpAttendance(attendanceData, attendance);
 }
 
 
@@ -32,7 +32,6 @@ export function beforeSubmit(context: EntryPoints.UserEvent.beforeSubmitContext)
 
 function getAttendancePeriod(csvFileContent, attendanceSheet: AttendanceSheet) {
     let recordDate = new Date(attendanceSheet.getField(AttendanceSheetField.DATE).value.toString());
-    let checkInList = [];
     let fileRows = csvFileContent.split('\r\n');
     // CSV File Columns
     let headers = fileRows[0].split(',');
@@ -40,7 +39,20 @@ function getAttendancePeriod(csvFileContent, attendanceSheet: AttendanceSheet) {
     let empMachineIDIndex: number = headers.indexOf(attendanceSheet.machineIDHeader);
     let timeIndex: number = headers.indexOf(attendanceSheet.timeHeader);
     let stateIndex: number = headers.indexOf(attendanceSheet.stateHeader);
-    let employeesAttendance = [];
+    /**
+     * @example
+     *  {
+     *      "empFingerprintId": {
+     *          name: '',
+     *          id: '',
+     *          checkIn: "time",
+     *          checkOut: "time",
+     *          workHours: "number",
+     *          notes: "sting",
+     *      },  ...
+     *  }
+     */
+    let attendanceData = {};
 
     for (let i = 1; i < fileRows.length; i++) {
         let empData = fileRows[i].split(',');
@@ -50,82 +62,73 @@ function getAttendancePeriod(csvFileContent, attendanceSheet: AttendanceSheet) {
             let empName: string = empData[empNameIndex];
             let empAttState: string = empData[stateIndex];
             let empAttDate = new Date(empData[timeIndex]);
-            let empAttDetails = {};
-            let checkInAndOut = false;
 
-            if (empAttState == attendanceSheet.checkInString) {  // Check-In
 
-                if (recordDate.getDate() == empAttDate.getDate() && recordDate.getMonth() == empAttDate.getMonth()
-                    && recordDate.getFullYear() == empAttDate.getFullYear()) {
+            // Check if the current row date is the record date, else ignore this row.
+            if (recordDate.getDate() != empAttDate.getDate() || recordDate.getMonth() != empAttDate.getMonth()
+                || recordDate.getFullYear() != empAttDate.getFullYear()) {
+                continue;
+            }
 
-                    checkInList.push({
+            if (empAttState == attendanceSheet.checkInString) {  // Check-In    
+                if (!attendanceData[empMachineID]) {
+                    attendanceData[empMachineID] = {
                         name: empName,
                         id: empMachineID,
-                        date: empAttDate,
-                        time: (empAttDate)
-                    });
-                }
+                        checkIn: (empAttDate)
+                    };
+                    let maxStartDate = new Date(recordDate.getTime());
+                    let maxCheckInTime = maxStartDate.setHours(9);
+                    let delay = empAttDate.getTime() - maxCheckInTime;
+                    attendanceData[empMachineID]["notes"] = (delay > 0) ? `• Delayed with ${Model.millisecondsToHuman(delay).minutes} mins.` : "";
+                }   //? Add here in case checkOut is before checkIn
             } else if (empAttState == attendanceSheet.checkOutString) {  // Check-Out
-                let empCheckOutDate = empAttDate;
-                for (let j = 0; j < checkInList.length; j++) {
-                    if (empMachineID == checkInList[j].id) {
-                        //Calculating Working Hours
-                        let workPeriodInMS = empCheckOutDate.getTime() - checkInList[j].date.getTime();
-
-                        if (Model.millisecondsToHuman(workPeriodInMS).days >= 1) {
-                            // Missing Check-Out
-                            empAttDetails['notes'] = "• Missing Check-Out";
-                        } else {
-                            let workPeriod = Model.millisecondsToHHMMSS(workPeriodInMS, true);
-                            empAttDetails['workHours'] = workPeriod;
-                        }
-
-                        empAttDetails['id'] = empMachineID;
-                        empAttDetails['name'] = empName;
-                        empAttDetails['checkIn'] = checkInList[j].date;
-                        empAttDetails['checkOut'] = (empCheckOutDate);
-                        employeesAttendance.push(empAttDetails);
-
-                        // Removing Employee's Checked-In Record from the list (Performance Wise)
-                        checkInList.splice(j, 1);
-
-                        checkInAndOut = true;
-                        break;
-                    }
-                    if (!checkInAndOut) {
-                        employeesAttendance.push({
-                            name: empName,
-                            id: empMachineID,
-                            checkOut: (empCheckOutDate),
-                            notes: "• Missing Check-In"
-                        });
-                    }
+                if (!attendanceData[empMachineID]) {
+                    attendanceData[empMachineID] = {
+                        name: empName,
+                        id: empMachineID,
+                        checkOut: (empAttDate)
+                    };
+                } else {
+                    attendanceData[empMachineID]["checkOut"] = empAttDate;
                 }
-
+                attendanceData[empMachineID]["notes"] = attendanceData[empMachineID]["notes"] || "";
             }
         }
     }
-
-    // Checking if an employee has a missing check-out
-    for (let i = 0; i < checkInList.length; i++) {
-        for (let j = 0; j < employeesAttendance.length; j++) {
-            if (checkInList[i].id == employeesAttendance[j].id) {
-                checkInList.splice(i, 1);
-                break;
-            }
-        }
-        employeesAttendance.push({
-            name: checkInList[i].name,
-            id: checkInList[i].id,
-            checkIn: checkInList[i].checkIn,
-            notes: "• Missing Check-Out"
-        });
-    }
-
-    return employeesAttendance;
+    let calculatedAttData = calculateWorkingHours(attendanceData, recordDate);
+    return calculatedAttData;
 }
 
-function saveEmpAttendance(employeesAttendance: {}[], attendanceSheet: AttendanceSheet) {
+
+function calculateWorkingHours(attendanceData: {}, recordDate) {
+    Object.keys(attendanceData).forEach(empID => {
+        let empData = attendanceData[empID];
+        if (!empData.checkIn) {
+            empData["notes"] += "• Missing Check-In";
+        } else if (!empData.checkOut) {
+            empData["notes"] += "• Missing Check-Out";
+        } else if (empData.checkIn && empData.checkOut) {
+            let sysStartDate = new Date(recordDate.getTime());
+            let sysStartTime = sysStartDate.setHours(7);
+            let checkIn_sysTime = (sysStartTime > new Date(empData.checkIn).getTime()) ? sysStartDate : new Date(empData.checkIn);
+            //Calculating Working Hours
+            let workPeriodInMS = new Date(empData.checkOut).getTime() - checkIn_sysTime.getTime();
+            if (Model.millisecondsToHuman(workPeriodInMS).days >= 1) {
+                // Missing Check-Out
+                empData["notes"] += "• Missing Check-Out";
+            } else {
+                let workPeriod = Model.millisecondsToHHMMSS(workPeriodInMS, true);
+                empData['workHours'] = workPeriod
+            }
+        }
+    });
+
+    return attendanceData;
+}
+
+
+function saveEmpAttendance(attendanceData: {}, attendanceSheet: AttendanceSheet) {
     // let employees = new Employee().find(['custentity_emp_attendance_machine_id']);
     const recordDate = attendanceSheet.getField(AttendanceSheetField.DATE).value;
     const officialWorkingHours = Model.hhmmssToMilliseconds('08:30:00');
@@ -135,56 +138,98 @@ function saveEmpAttendance(employeesAttendance: {}[], attendanceSheet: Attendanc
     }).run().getRange({ start: 0, end: 999 });
 
 
-    for (let j = 0; j < employees.length; j++) {
-        let isAttended = false;
+    for (let i = 0; i < employees.length; i++) {
         let empAttRecord = record.create({
             type: 'customrecord_edc_attendance',
         });
 
-        for (let i = 0; i < employeesAttendance.length; i++) {
-            if (employees[j].getValue('custentity_emp_attendance_machine_id') == employeesAttendance[i]['id']) {
-                let overtime = 0;
-                if (employeesAttendance[i]['workHours']) {
-                    overtime = Model.hhmmssToMilliseconds(employeesAttendance[i]['workHours']) - officialWorkingHours;
+        const empMachineID = employees[i].getValue('custentity_emp_attendance_machine_id');
+        const empData: {} = attendanceData[empMachineID as string];
+        if (empMachineID && empData) {
+            let overtime = 0;
+            if (empData['workHours']) {
+                overtime = Model.hhmmssToMilliseconds(empData['workHours']) - officialWorkingHours;
+                if (overtime < 0) {
+                    overtime += getDayMissionsDuration(recordDate, employees[i].id);
                     if (overtime < 0) {
-                        overtime += getDayMissionsDuration(recordDate, employees[j].id);
-                        if (overtime < 0) {
-                            const remainingPermissionMins = getRemainingPermissionPeriod(recordDate, employees[j].id);
-                            if (remainingPermissionMins > 0) {
-                                let remainingPermissionMinsAfterDeduction = remainingPermissionMins + (overtime / (60 * 1000));    // (overtime/60,000) to convert from milliseconds to minutes.
-                                let reqPermission = 0;
-                                if (remainingPermissionMinsAfterDeduction < 0) {
-                                    reqPermission = remainingPermissionMins;
-                                    overtime = remainingPermissionMinsAfterDeduction * 60 * 1000;
-                                } else {
-                                    reqPermission = Math.abs(overtime / 60000);
-                                    overtime = 0;
-                                }
-                                createPermission(employees[j].id, recordDate, reqPermission, remainingPermissionMins);
+                        const remainingPermissionMins = getRemainingPermissionPeriod(recordDate, employees[i].id);
+                        if (remainingPermissionMins > 0) {
+                            let remainingPermissionMinsAfterDeduction = remainingPermissionMins + (overtime / (60 * 1000));    // (overtime/60,000) to convert from milliseconds to minutes.
+                            let reqPermission = 0;
+                            if (remainingPermissionMinsAfterDeduction < 0) {
+                                reqPermission = remainingPermissionMins;
+                                overtime = remainingPermissionMinsAfterDeduction * 60 * 1000;
+                            } else {
+                                reqPermission = Math.abs(overtime / 60000);
+                                overtime = 0;
                             }
+                            createPermission(employees[i].id, recordDate, reqPermission, remainingPermissionMins);
                         }
                     }
                 }
-
-                empAttRecord.setValue('custrecord_attendance_emp', employees[j].id);
-                empAttRecord.setValue('custrecord_attendance_date', recordDate);
-                empAttRecord.setValue('custrecord_attendance_check_in', employeesAttendance[i]['checkIn']);
-                empAttRecord.setValue('custrecord_attendance_check_out', employeesAttendance[i]['checkOut']);
-                empAttRecord.setValue('custrecord_attendance_work_hours', employeesAttendance[i]['workHours']);
-                empAttRecord.setValue('custrecord_attendance_overtime', (overtime >= 0) ? Model.millisecondsToHHMMSS(overtime) : "-" + Model.millisecondsToHHMMSS(Math.abs(overtime)));
-                empAttRecord.setValue('custrecord_attendance_notes', employeesAttendance[i]['notes']);
-                isAttended = true;
-                break;
             }
-        }
-        if (!isAttended) {
-            let businessTripID = checkDayInBusinessTrips(recordDate, employees[j].id);
-            let attendanceNote = (businessTripID) ? '• In Business Trip ID: ' + businessTripID : '• Absent';
+
+            empAttRecord.setValue('custrecord_attendance_emp', employees[i].id);
+            empAttRecord.setValue('custrecord_attendance_date', recordDate);
+            empAttRecord.setValue('custrecord_attendance_check_in', empData['checkIn']);
+            empAttRecord.setValue('custrecord_attendance_check_out', empData['checkOut']);
+            empAttRecord.setValue('custrecord_attendance_work_hours', empData['workHours']);
+            empAttRecord.setValue('custrecord_attendance_overtime', (overtime >= 0) ? Model.millisecondsToHHMMSS(overtime) : "-" + Model.millisecondsToHHMMSS(Math.abs(overtime)));
+            empAttRecord.setValue('custrecord_attendance_notes', empData['notes']);
+        } else {
+            let attendanceNote = "• Absent";
+            let businessTripID = checkDayInBusinessTrips(recordDate, employees[i].id);
+            if (businessTripID) {
+                attendanceNote = "• On a Business Trip ID: " + businessTripID;
+            } else {
+                let vacationReq = checkDayInVacationRequest(recordDate, employees[i].id);
+                if (vacationReq) {
+                    if (vacationReq.isFullDay) {
+                        attendanceNote = "• On vacation ID: " + vacationReq.id;
+                    } else {
+                        attendanceNote = `• On a part-day leave ID: ${vacationReq.id} for ${vacationReq.partDay} day.`;
+                    }
+                }
+            }
             empAttRecord.setValue('custrecord_attendance_notes', attendanceNote);
         }
         empAttRecord.save();
     }
 }
+
+
+function checkDayInVacationRequest(attendanceDate, employeeID): { id: string, isFullDay: boolean, partDay?: number } {
+    const vacations = search.create({
+        type: "customrecord_edc_vac_request",
+        filters: [
+            search.createFilter({
+                name: "custrecord_edc_vac_req_emp_name",
+                operator: search.Operator.ANYOF,
+                values: employeeID,
+            }),
+            search.createFilter({
+                name: "custrecord_edc_vac_req_status",
+                operator: search.Operator.ANYOF,
+                values: ApprovalStatus.APPROVED,
+            })
+        ],
+        columns: ["custrecord_edc_vac_req_start", "custrecord_edc_vac_req_end", "custrecord_edc_vac_req_leave_partday"],
+    }).run().getRange({ start: 0, end: 999 });
+
+    for (let i = 0; i < vacations.length; i++) {
+        const startDate = new Date(vacations[i].getValue("custrecord_edc_vac_req_start").toString());
+        const endDate = new Date(vacations[i].getValue("custrecord_edc_vac_req_end").toString());
+        const partDay = Number(vacations[i].getText("custrecord_edc_vac_req_leave_partday"));
+        if (startDate.getTime() <= attendanceDate.getTime() && attendanceDate.getTime() <= endDate.getTime()) {
+            if (partDay == 1 || partDay == 0)
+                return { id: vacations[i].id, isFullDay: true };
+            else
+                return { id: vacations[i].id, isFullDay: false, partDay: partDay }
+        }
+    }
+    return;
+}
+
 
 function checkDayInBusinessTrips(attendanceDate, employeeID): string | boolean {
     const businessTrips = search.create({
