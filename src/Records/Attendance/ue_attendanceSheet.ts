@@ -24,7 +24,7 @@ export function beforeSubmit(context: EntryPoints.UserEvent.beforeSubmitContext)
     let attendanceFile = file.load({ id: fileID });
     let fileContent = attendanceFile.getContents();    // Getting the inside data
     let attendanceData = getAttendancePeriod(fileContent, attendance);
-    saveEmpAttendance(attendanceData, attendance);
+    calculateOvertime(attendanceData, attendance);
 }
 
 
@@ -128,7 +128,7 @@ function calculateWorkingHours(attendanceData: {}, recordDate) {
 }
 
 
-function saveEmpAttendance(attendanceData: {}, attendanceSheet: AttendanceSheet) {
+function calculateOvertime(attendanceData: {}, attendanceSheet: AttendanceSheet) {
     // let employees = new Employee().find(['custentity_emp_attendance_machine_id']);
     const recordDate = attendanceSheet.getField(AttendanceSheetField.DATE).value;
     const officialWorkingHours = Model.hhmmssToMilliseconds('08:30:00');
@@ -139,9 +139,6 @@ function saveEmpAttendance(attendanceData: {}, attendanceSheet: AttendanceSheet)
 
 
     for (let i = 0; i < employees.length; i++) {
-        let empAttRecord = record.create({
-            type: 'customrecord_edc_attendance',
-        });
 
         const empMachineID = employees[i].getValue('custentity_emp_attendance_machine_id');
         const empData: {} = attendanceData[empMachineID as string];
@@ -150,6 +147,17 @@ function saveEmpAttendance(attendanceData: {}, attendanceSheet: AttendanceSheet)
             if (empData['workHours']) {
                 overtime = Model.hhmmssToMilliseconds(empData['workHours']) - officialWorkingHours;
                 if (overtime < 0) {
+                    const vacationReq = getVacationRequest(recordDate, employees[i].id);
+                    if (vacationReq) {
+                        overtime += vacationReq.partDay * Model.millisecondsToHuman(officialWorkingHours).hours;
+                        if (overtime >= 0) {
+                            empData['notes'] += `• On a part-day leave ID: ${vacationReq.id} for ${vacationReq.partDay} day.`;
+                            const overtimeString = Model.millisecondsToHHMMSS(overtime);
+                            createAttendanceRecord(employees[i].id, recordDate, empData['notes'], overtimeString);
+                            continue;
+                        }
+                    }
+
                     overtime += getDayMissionsDuration(recordDate, employees[i].id);
                     if (overtime < 0) {
                         const remainingPermissionMins = getRemainingPermissionPeriod(recordDate, employees[i].id);
@@ -169,20 +177,15 @@ function saveEmpAttendance(attendanceData: {}, attendanceSheet: AttendanceSheet)
                 }
             }
 
-            empAttRecord.setValue('custrecord_attendance_emp', employees[i].id);
-            empAttRecord.setValue('custrecord_attendance_date', recordDate);
-            empAttRecord.setValue('custrecord_attendance_check_in', empData['checkIn']);
-            empAttRecord.setValue('custrecord_attendance_check_out', empData['checkOut']);
-            empAttRecord.setValue('custrecord_attendance_work_hours', empData['workHours']);
-            empAttRecord.setValue('custrecord_attendance_overtime', (overtime >= 0) ? Model.millisecondsToHHMMSS(overtime) : "-" + Model.millisecondsToHHMMSS(Math.abs(overtime)));
-            empAttRecord.setValue('custrecord_attendance_notes', empData['notes']);
-        } else {
+            const overtimeString = (overtime >= 0) ? Model.millisecondsToHHMMSS(overtime) : "-" + Model.millisecondsToHHMMSS(Math.abs(overtime));
+            createAttendanceRecord(employees[i].id, recordDate, empData['notes'], empData['workHours'], empData['checkIn'], empData['checkOut'], overtimeString);
+        } else {    // Absent Case
             let attendanceNote = "• Absent";
             let businessTripID = checkDayInBusinessTrips(recordDate, employees[i].id);
             if (businessTripID) {
                 attendanceNote = "• On a Business Trip ID: " + businessTripID;
             } else {
-                let vacationReq = checkDayInVacationRequest(recordDate, employees[i].id);
+                let vacationReq = getVacationRequest(recordDate, employees[i].id);
                 if (vacationReq) {
                     if (vacationReq.isFullDay) {
                         attendanceNote = "• On vacation ID: " + vacationReq.id;
@@ -191,14 +194,33 @@ function saveEmpAttendance(attendanceData: {}, attendanceSheet: AttendanceSheet)
                     }
                 }
             }
-            empAttRecord.setValue('custrecord_attendance_notes', attendanceNote);
+            createAttendanceRecord(employees[i].id, recordDate, attendanceNote, "00:00:00");
         }
-        empAttRecord.save();
     }
 }
 
 
-function checkDayInVacationRequest(attendanceDate, employeeID): { id: string, isFullDay: boolean, partDay?: number } {
+function createAttendanceRecord(empID: string, recordDate: any, notes: string, workingHours: string, checkIn?: string, checkOut?: string, overtime?: string) {
+    let empAttRecord = record.create({
+        type: 'customrecord_edc_attendance',
+    });
+
+    empAttRecord.setValue('custrecord_attendance_emp', empID);
+    empAttRecord.setValue('custrecord_attendance_date', recordDate);
+    empAttRecord.setValue('custrecord_attendance_notes', notes);
+    empAttRecord.setValue('custrecord_attendance_work_hours', workingHours);
+    if (checkIn)
+        empAttRecord.setValue('custrecord_attendance_check_in', checkIn);
+    if (checkOut)
+        empAttRecord.setValue('custrecord_attendance_check_out', checkOut);
+    if (overtime) {
+        empAttRecord.setValue('custrecord_attendance_overtime', overtime);
+    }
+    empAttRecord.save();
+}
+
+
+function getVacationRequest(attendanceDate, employeeID): { id: string, isFullDay: boolean, partDay?: number } {
     const vacations = search.create({
         type: "customrecord_edc_vac_request",
         filters: [
@@ -217,10 +239,11 @@ function checkDayInVacationRequest(attendanceDate, employeeID): { id: string, is
     }).run().getRange({ start: 0, end: 999 });
 
     for (let i = 0; i < vacations.length; i++) {
-        const startDate = new Date(vacations[i].getValue("custrecord_edc_vac_req_start").toString());
-        const endDate = new Date(vacations[i].getValue("custrecord_edc_vac_req_end").toString());
+        const startDate = Model.convertNSDateToJSDate(vacations[i].getValue("custrecord_edc_vac_req_start") as string);
+        const endDate = Model.convertNSDateToJSDate(vacations[i].getValue("custrecord_edc_vac_req_end") as string);
         const partDay = Number(vacations[i].getText("custrecord_edc_vac_req_leave_partday"));
         if (startDate.getTime() <= attendanceDate.getTime() && attendanceDate.getTime() <= endDate.getTime()) {
+            log.debug("log data", `Emp ID: ${employeeID} startDate: ${startDate} | endDate: ${endDate} | attendanceRecordDate: ${attendanceDate}`);
             if (partDay == 1 || partDay == 0)
                 return { id: vacations[i].id, isFullDay: true };
             else
